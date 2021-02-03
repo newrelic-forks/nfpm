@@ -71,40 +71,6 @@ func Parse(in io.Reader) (config Config, err error) {
 	return config, config.Validate()
 }
 
-func (c *Config) expandEnvVars() {
-	// Version related fields
-	c.Info.Release = os.ExpandEnv(c.Info.Release)
-	c.Info.Version = os.ExpandEnv(c.Info.Version)
-	c.Info.Prerelease = os.ExpandEnv(c.Info.Prerelease)
-
-	// Package signing related fields
-	c.Info.Deb.Signature.KeyFile = os.ExpandEnv(c.Deb.Signature.KeyFile)
-	c.Info.RPM.Signature.KeyFile = os.ExpandEnv(c.RPM.Signature.KeyFile)
-	c.Info.APK.Signature.KeyFile = os.ExpandEnv(c.APK.Signature.KeyFile)
-
-	// Package signing passphrase
-	generalPassphrase := os.ExpandEnv("$NFPM_PASSPHRASE")
-	c.Info.Deb.Signature.KeyPassphrase = generalPassphrase
-	c.Info.RPM.Signature.KeyPassphrase = generalPassphrase
-	c.Info.APK.Signature.KeyPassphrase = generalPassphrase
-
-
-	debPassphrase := os.ExpandEnv("$NFPM_DEB_PASSPHRASE")
-	if debPassphrase != "" {
-		c.Info.Deb.Signature.KeyPassphrase = debPassphrase
-	}
-
-	rpmPassphrase := os.ExpandEnv("$NFPM_RPM_PASSPHRASE")
-	if rpmPassphrase != "" {
-		c.Info.RPM.Signature.KeyPassphrase = rpmPassphrase
-	}
-
-	apkPassphrase := os.ExpandEnv("$NFPM_APK_PASSPHRASE")
-	if apkPassphrase != "" {
-		c.Info.APK.Signature.KeyPassphrase = apkPassphrase
-	}
-}
-
 // ParseFile decodes YAML data from a file path into a configuration struct.
 func ParseFile(path string) (config Config, err error) {
 	var file *os.File
@@ -165,6 +131,40 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (c *Config) expandEnvVars() {
+	// Version related fields
+	c.Info.Release = os.ExpandEnv(c.Info.Release)
+	c.Info.Version = os.ExpandEnv(c.Info.Version)
+	c.Info.Prerelease = os.ExpandEnv(c.Info.Prerelease)
+	c.Info.Arch = os.ExpandEnv(c.Info.Arch)
+
+	// Package signing related fields
+	c.Info.Deb.Signature.KeyFile = os.ExpandEnv(c.Deb.Signature.KeyFile)
+	c.Info.RPM.Signature.KeyFile = os.ExpandEnv(c.RPM.Signature.KeyFile)
+	c.Info.APK.Signature.KeyFile = os.ExpandEnv(c.APK.Signature.KeyFile)
+
+	// Package signing passphrase
+	generalPassphrase := os.ExpandEnv("$NFPM_PASSPHRASE")
+	c.Info.Deb.Signature.KeyPassphrase = generalPassphrase
+	c.Info.RPM.Signature.KeyPassphrase = generalPassphrase
+	c.Info.APK.Signature.KeyPassphrase = generalPassphrase
+
+	debPassphrase := os.ExpandEnv("$NFPM_DEB_PASSPHRASE")
+	if debPassphrase != "" {
+		c.Info.Deb.Signature.KeyPassphrase = debPassphrase
+	}
+
+	rpmPassphrase := os.ExpandEnv("$NFPM_RPM_PASSPHRASE")
+	if rpmPassphrase != "" {
+		c.Info.RPM.Signature.KeyPassphrase = rpmPassphrase
+	}
+
+	apkPassphrase := os.ExpandEnv("$NFPM_APK_PASSPHRASE")
+	if apkPassphrase != "" {
+		c.Info.APK.Signature.KeyPassphrase = apkPassphrase
+	}
 }
 
 // Info contains information about a single package.
@@ -244,7 +244,7 @@ type PackageSignature struct {
 }
 
 type RPMSignature struct {
-	PackageSignature    `yaml:",inline"`
+	PackageSignature `yaml:",inline"`
 }
 
 type APK struct {
@@ -252,7 +252,7 @@ type APK struct {
 }
 
 type APKSignature struct {
-	PackageSignature    `yaml:",inline"`
+	PackageSignature `yaml:",inline"`
 	// defaults to <maintainer email>.rsa.pub
 	KeyName string `yaml:"key_name,omitempty"`
 }
@@ -266,7 +266,7 @@ type Deb struct {
 }
 
 type DebSignature struct {
-	PackageSignature    `yaml:",inline"`
+	PackageSignature `yaml:",inline"`
 	// origin, maint or archive (defaults to origin)
 	Type string `yaml:"type,omitempty"`
 }

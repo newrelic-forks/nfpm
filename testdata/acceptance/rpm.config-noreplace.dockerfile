@@ -1,4 +1,4 @@
-FROM fedora
+FROM fedora AS test_base
 ARG package
 COPY ${package} /tmp/new_foo.rpm
 COPY tmp/noreplace_old_rpm.rpm /tmp/old_foo.rpm

@@ -3,8 +3,8 @@ TEST_PATTERN?=.
 TEST_OPTIONS?=
 TEST_TIMEOUT?=15m
 TEST_PARALLEL?=2
-CONTAINER_RUNTIME?=docker
-export CONTAINER_RUNTIME
+DOCKER_BUILDKIT?=1
+export DOCKER_BUILDKIT
 
 
 export PATH := ./bin:$(PATH)
@@ -19,11 +19,11 @@ setup:
 .PHONY: setup
 
 pull_test_imgs:
-	grep FROM ./testdata/acceptance/*.dockerfile | cut -f2 -d' ' | sort | uniq | while read -r img; do $(CONTAINER_RUNTIME) pull "$$img"; done
+	grep -m 1 FROM ./testdata/acceptance/*.dockerfile | cut -f2 -d' ' | sort | uniq | while read -r img; do docker pull "$$img"; done
 .PHONY: pull_test_imgs
 
 acceptance: pull_test_imgs
-	make -e TEST_OPTIONS="-tags=acceptance" test
+	make -e TEST_OPTIONS="-tags=acceptance" -e TEST_TIMEOUT="60m" test
 .PHONY: acceptance
 
 test:
@@ -42,7 +42,7 @@ lint: check
 	golangci-lint run
 .PHONY: check
 
-ci: build lint test acceptance
+ci: lint test
 .PHONY: ci
 
 build:
@@ -64,7 +64,7 @@ imgs:
 .PHONY: imgs
 
 serve:
-	@$(CONTAINER_RUNTIME) run --rm -it -p 8000:8000 -v ${PWD}/www:/docs squidfunk/mkdocs-material
+	@docker run --rm -it -p 8000:8000 -v ${PWD}/www:/docs squidfunk/mkdocs-material
 .PHONY: serve
 
 todo:

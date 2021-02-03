@@ -30,7 +30,7 @@ jobs:
       - name: Run tests
         run: |
           go test -v -race -count=1 ./...
-  goreleaser:
+  unit:
     runs-on: ubuntu-latest
     steps:
       -
@@ -62,7 +62,7 @@ jobs:
         run: |
           make setup
       -
-        name: Make CI
+        name: Make Unit Tests
         run: |
           make ci
       -
@@ -71,9 +71,165 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
+  deb:
+    runs-on: ubuntu-latest
+    env:
+      NO_TEST_PPC64LE: "true"
+    needs:
+      - unit
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+      -
+        name: Cache Go modules
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      -
+        name: Make Setup
+        run: |
+          make setup
+      -
+        name: Make Acceptance Debian
+        run: |
+          TEST_PATTERN=/deb/amd64 make acceptance
+  rpm:
+    runs-on: ubuntu-latest
+    env:
+      NO_TEST_PPC64LE: "true"
+    needs:
+      - unit
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+      -
+        name: Cache Go modules
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      -
+        name: Make Setup
+        run: |
+          make setup
+      -
+        name: Make Acceptance RPM
+        run: |
+          TEST_PATTERN=/rpm/amd64 make acceptance
+  apk:
+    runs-on: ubuntu-latest
+    needs:
+      - unit
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+      -
+        name: Cache Go modules
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      -
+        name: Make Setup
+        run: |
+          make setup
+      -
+        name: Make Acceptance Alpine
+        run: |
+          TEST_PATTERN=/apk/amd64 make acceptance
+  goreleaser:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - WindowsTest
+      - unit
+      - deb
+      - rpm
+      - apk
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+      -
+        name: Cache Go modules
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      -
+        name: Make Setup
+        run: |
+          make setup
+      -
+        name: Make build
+        run: |
+          make build
       -
         name: Docker Login
-        if: success() && startsWith(github.ref, 'refs/tags/')
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -84,7 +240,6 @@ jobs:
       -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2
-        if: success() && startsWith(github.ref, 'refs/tags/')
         with:
           version: latest
           args: release --rm-dist

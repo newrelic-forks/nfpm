@@ -18,265 +18,168 @@ import (
 )
 
 // nolint: gochecknoglobals
-var formats = []string{"deb", "rpm", "apk"}
+var formatArchs = map[string][]string{
+	"apk": []string{"amd64", "arm64", "386", "ppc64le"},
+	"deb": []string{"amd64", "arm64", "ppc64le"},
+	"rpm": []string{"amd64", "arm64", "ppc64le"},
+}
 
-func TestSimple(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("amd64-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("simple_%s", format),
-				Conf:       "simple.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.dockerfile", format),
-			})
-		})
-		t.Run(fmt.Sprintf("i386-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("simple_%s_386", format),
-				Conf:       "simple.386.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.386.dockerfile", format),
-			})
-		})
-		t.Run(fmt.Sprintf("ppc64le-%s", format), func(t *testing.T) {
-			t.Skip("for some reason travis fails to run those")
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("simple_%s_ppc64le", format),
-				Conf:       "simple.ppc64le.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.ppc64le.dockerfile", format),
-			})
-		})
-		t.Run(fmt.Sprintf("arm64-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("simple_%s_arm64", format),
-				Conf:       "simple.arm64.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.arm64.dockerfile", format),
-			})
-		})
+func TestCore(t *testing.T) {
+	var testNames = []string{
+		"min",
+		"simple",
+		"no-glob",
+		"complex",
+		"env-var-version",
+		"overrides",
+		"meta",
+		"withchangelog",
+		"symlink",
+		"signed",
+	}
+	for _, name := range testNames {
+		name := name
+		for format, architecture := range formatArchs {
+			format := format
+			for _, arch := range architecture {
+				arch := arch
+				t.Run(fmt.Sprintf("%s/%s/%s", format, arch, name), func(t *testing.T) {
+					t.Parallel()
+					if arch == "ppc64le" && os.Getenv("NO_TEST_PPC64LE") == "true" {
+						t.Skip("ppc64le arch not supported in pipeline")
+					}
+					accept(t, acceptParms{
+						Name:   fmt.Sprintf("%s_%s", name, arch),
+						Conf:   fmt.Sprintf("core.%s.yaml", name),
+						Format: format,
+						Docker: dockerParams{
+							File:   fmt.Sprintf("%s.dockerfile", format),
+							Target: name,
+							Arch:   arch,
+						},
+					})
+				})
+			}
+		}
 	}
 }
 
-func TestComplex(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("amd64-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("complex_%s", format),
-				Conf:       "complex.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.complex.dockerfile", format),
-			})
-		})
-		t.Run(fmt.Sprintf("i386-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("complex_%s_386", format),
-				Conf:       "complex.386.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.386.complex.dockerfile", format),
-			})
-		})
-	}
-}
+// func TestConfigNoReplace(t *testing.T) {
+// 	var target = "./testdata/acceptance/tmp/noreplace_old_rpm.rpm"
+// 	require.NoError(t, os.MkdirAll("./testdata/acceptance/tmp", 0700))
+//
+// 	config, err := nfpm.ParseFile("./testdata/acceptance/rpm.config-noreplace-old.yaml")
+// 	require.NoError(t, err)
+//
+// 	info, err := config.Get("rpm")
+// 	require.NoError(t, err)
+// 	require.NoError(t, nfpm.Validate(info))
+//
+// 	pkg, err := nfpm.Get("rpm")
+// 	require.NoError(t, err)
+//
+// 	f, err := os.Create(target)
+// 	require.NoError(t, err)
+// 	info.Target = target
+// 	require.NoError(t, pkg.Package(nfpm.WithDefaults(info), f))
+//
+// 	t.Run("rpm", func(t *testing.T) {
+// 		accept(t, acceptParms{
+// 			Name:       "noreplace_rpm",
+// 			Conf:       "rpm.config-noreplace.yaml",
+// 			Format:     "rpm",
+// 			Dockerfile: "rpm.config-noreplace.dockerfile",
+// 		})
+// 	})
+// }
 
-func TestConfigNoReplace(t *testing.T) {
-	var target = "./testdata/acceptance/tmp/noreplace_old_rpm.rpm"
-	require.NoError(t, os.MkdirAll("./testdata/acceptance/tmp", 0700))
-
-	config, err := nfpm.ParseFile("./testdata/acceptance/config-noreplace-old.yaml")
-	require.NoError(t, err)
-
-	info, err := config.Get("rpm")
-	require.NoError(t, err)
-	require.NoError(t, nfpm.Validate(info))
-
-	pkg, err := nfpm.Get("rpm")
-	require.NoError(t, err)
-
-	f, err := os.Create(target)
-	require.NoError(t, err)
-	info.Target = target
-	require.NoError(t, pkg.Package(nfpm.WithDefaults(info), f))
-
-	t.Run("rpm", func(t *testing.T) {
-		accept(t, acceptParms{
-			Name:       "noreplace_rpm",
-			Conf:       "config-noreplace.yaml",
-			Format:     "rpm",
-			Dockerfile: "rpm.config-noreplace.dockerfile",
-		})
-	})
-}
-
-func TestEnvVarVersion(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("amd64-%s", format), func(t *testing.T) {
-			os.Setenv("SEMVER", "v1.0.0-0.1.b1+git.abcdefgh")
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("env-var-version_%s", format),
-				Conf:       "env-var-version.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.env-var-version.dockerfile", format),
-			})
-		})
-	}
-}
-
-func TestComplexOverrides(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("amd64-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("overrides_%s", format),
-				Conf:       "overrides.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.overrides.dockerfile", format),
-			})
-		})
-	}
-}
-
-func TestMin(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("amd64-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("min_%s", format),
-				Conf:       "min.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.min.dockerfile", format),
-			})
-		})
-	}
-}
-
-func TestMeta(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("amd64-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("meta_%s", format),
-				Conf:       "meta.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.meta.dockerfile", format),
-			})
-		})
-	}
-}
-
-func TestRPMCompression(t *testing.T) {
+func TestCompression(t *testing.T) {
+	format := "rpm"
 	compressFormats := []string{"gzip", "xz", "lzma"}
-	for _, format := range compressFormats {
-		format := format
-		t.Run(format, func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("%s_compression_rpm", format),
-				Conf:       fmt.Sprintf("%s.compression.yaml", format),
-				Format:     "rpm",
-				Dockerfile: fmt.Sprintf("%s.rpm.compression.dockerfile", format),
+	for _, arch := range formatArchs[format] {
+		arch := arch
+		for _, compFormat := range compressFormats {
+			compFormat := compFormat
+			t.Run(fmt.Sprintf("%s/%s/%s", format, arch, compFormat), func(t *testing.T) {
+				if arch == "ppc64le" && os.Getenv("NO_TEST_PPC64LE") == "true" {
+					t.Skip("ppc64le arch not supported in pipeline")
+				}
+				accept(t, acceptParms{
+					Name:   fmt.Sprintf("%s_compression_rpm", compFormat),
+					Conf:   fmt.Sprintf("rpm.%s.compression.yaml", compFormat),
+					Format: format,
+					Docker: dockerParams{
+						File: fmt.Sprintf("%s.dockerfile", format),
+						Target: "compression",
+						Arch: arch,
+						BuildArgs: []string{fmt.Sprintf("compression=%s", compFormat)},
+					},
+				})
 			})
-		})
+		}
 	}
 }
 
-func TestRPMRelease(t *testing.T) {
-	accept(t, acceptParms{
-		Name:       "release_rpm",
-		Conf:       "release.rpm.yaml",
-		Format:     "rpm",
-		Dockerfile: "release.rpm.dockerfile",
-	})
-}
+// func TestRPMRelease(t *testing.T) {
+// 	accept(t, acceptParms{
+// 		Name:       "release_rpm",
+// 		Conf:       "rpm.release.yaml",
+// 		Format:     "rpm",
+// 		Dockerfile: "rpm.release.dockerfile",
+// 	})
+// }
 
-func TestDebRules(t *testing.T) {
-	accept(t, acceptParms{
-		Name:       "rules.deb",
-		Conf:       "rules.deb.yaml",
-		Format:     "deb",
-		Dockerfile: "rules.deb.dockerfile",
-	})
-}
+// func TestDebRules(t *testing.T) {
+// 	accept(t, acceptParms{
+// 		Name:       "rules.deb",
+// 		Conf:       "deb.rules.yaml",
+// 		Format:     "deb",
+// 		Dockerfile: "deb.rules.dockerfile",
+// 	})
+// }
 
-func TestChangelog(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("changelog-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("changelog_%s", format),
-				Conf:       "withchangelog.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.changelog.dockerfile", format),
-			})
-		})
-	}
-}
+// func TestDebTriggers(t *testing.T) {
+// 	t.Run("triggers-deb", func(t *testing.T) {
+// 		accept(t, acceptParms{
+// 			Name:       "triggers-deb",
+// 			Conf:       "deb.triggers.yaml",
+// 			Format:     "deb",
+// 			Dockerfile: "deb.triggers.dockerfile",
+// 		})
+// 	})
+// }
 
-func TestDebTriggers(t *testing.T) {
-	t.Run("triggers-deb", func(t *testing.T) {
-		accept(t, acceptParms{
-			Name:       "triggers-deb",
-			Conf:       "triggers.yaml",
-			Format:     "deb",
-			Dockerfile: "deb.triggers.dockerfile",
-		})
-	})
-}
-
-func TestSymlink(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run(fmt.Sprintf("symlink-%s", format), func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("symlink_%s", format),
-				Conf:       "symlink.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.symlink.dockerfile", format),
-			})
-		})
-	}
-}
-
-func TestDebBreaks(t *testing.T) {
-	t.Run("breaks-deb", func(t *testing.T) {
-		accept(t, acceptParms{
-			Name:       "breaks-deb",
-			Conf:       "breaks.yaml",
-			Format:     "deb",
-			Dockerfile: "deb.breaks.dockerfile",
-		})
-	})
-}
-
-func TestSignatures(t *testing.T) {
-	for _, format := range formats {
-		format := format
-		t.Run("signed", func(t *testing.T) {
-			accept(t, acceptParms{
-				Name:       fmt.Sprintf("signed_%s", format),
-				Conf:       "signed.yaml",
-				Format:     format,
-				Dockerfile: fmt.Sprintf("%s.signed.dockerfile", format),
-			})
-		})
-	}
-}
+// func TestDebBreaks(t *testing.T) {
+// 	t.Run("breaks-deb", func(t *testing.T) {
+// 		accept(t, acceptParms{
+// 			Name:       "breaks-deb",
+// 			Conf:       "deb.breaks.yaml",
+// 			Format:     "deb",
+// 			Dockerfile: "deb.breaks.dockerfile",
+// 		})
+// 	})
+// }
 
 type acceptParms struct {
-	Name       string
-	Conf       string
-	Format     string
-	Dockerfile string
+	Name   string
+	Conf   string
+	Format string
+	Docker dockerParams
+}
+
+type dockerParams struct {
+	File      string
+	Target    string
+	Arch      string
+	BuildArgs []string
 }
 
 type testWriter struct {
-	t *testing.T
+	*testing.T
 }
 
 func (t testWriter) Write(p []byte) (n int, err error) {
-	t.t.Log(string(p))
+	t.Log(string(p))
 	return len(p), nil
 }
 
@@ -290,6 +193,8 @@ func accept(t *testing.T, params acceptParms) {
 
 	require.NoError(t, os.MkdirAll(tmp, 0700))
 
+	os.Setenv("SEMVER", "v1.0.0-0.1.b1+git.abcdefgh")
+	os.Setenv("BUILD_ARCH", params.Docker.Arch)
 	config, err := nfpm.ParseFile(configFile)
 	require.NoError(t, err)
 
@@ -300,17 +205,24 @@ func accept(t *testing.T, params acceptParms) {
 	pkg, err := nfpm.Get(params.Format)
 	require.NoError(t, err)
 
+	cmdArgs := []string{
+		"build", "--rm", "--force-rm",
+		"--platform", fmt.Sprintf("linux/%s", params.Docker.Arch),
+		"-f", params.Docker.File,
+		"--target", params.Docker.Target,
+		"--build-arg", "package=" + filepath.Join("tmp", packageName),
+	}
+	for _, arg := range params.Docker.BuildArgs {
+		cmdArgs = append(cmdArgs, "--build-arg", arg)
+	}
+	cmdArgs = append(cmdArgs, ".")
+
 	f, err := os.Create(target)
 	require.NoError(t, err)
 	info.Target = target
 	require.NoError(t, pkg.Package(nfpm.WithDefaults(info), f))
 	//nolint:gosec
-	cmd := exec.Command(
-		os.Getenv("CONTAINER_RUNTIME"), "build", "--rm", "--force-rm",
-		"-f", params.Dockerfile,
-		"--build-arg", "package="+filepath.Join("tmp", packageName),
-		".",
-	)
+	cmd := exec.Command("docker", cmdArgs...)
 	cmd.Dir = "./testdata/acceptance"
 	cmd.Stderr = testWriter{t}
 	cmd.Stdout = cmd.Stderr

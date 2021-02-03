@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/goreleaser/fileglob"
+
 	"github.com/goreleaser/nfpm/v2/internal/glob"
 )
 
@@ -177,6 +178,7 @@ func appendWithUniqueDestination(slice []*Content, elems ...*Content) ([]*Conten
 
 	for _, elem := range elems {
 		if present, ok := alreadyPresent[elem.Destination]; ok {
+			// nolint:goerr113
 			return nil, fmt.Errorf(
 				"cannot add %s because %s is already present at the same destination (%s): %w",
 				elem.Source, present.Source, present.Destination, ErrContentCollision)

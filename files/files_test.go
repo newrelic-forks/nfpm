@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
@@ -33,11 +32,64 @@ contents:
 	dec.KnownFields(true)
 	err := dec.Decode(&config)
 	require.NoError(t, err)
-	assert.Len(t, config.Contents, 2)
+	require.Len(t, config.Contents, 2)
 	for _, f := range config.Contents {
 		t.Logf("%+#v\n", f)
-		assert.Equal(t, f.Source, "a")
-		assert.Equal(t, f.Destination, "b")
+		require.Equal(t, f.Source, "a")
+		require.Equal(t, f.Destination, "b")
+	}
+}
+
+func TestDeepPathsWithGlob(t *testing.T) {
+	var config testStruct
+	dec := yaml.NewDecoder(strings.NewReader(`---
+contents:
+- src: testdata/globtest/**/*
+  dst: /bla
+  file_info:
+    mode: 0644
+    mtime: 2008-01-02T15:04:05Z
+`))
+	dec.KnownFields(true)
+	err := dec.Decode(&config)
+	require.NoError(t, err)
+	require.Len(t, config.Contents, 1)
+	parsedContents, err := files.ExpandContentGlobs(config.Contents, false)
+	require.NoError(t, err)
+	for _, f := range parsedContents {
+		switch f.Source {
+		case "testdata/globtest/nested/b.txt":
+			require.Equal(t, "/bla/nested/b.txt", f.Destination)
+		case "testdata/globtest/multi-nested/subdir/c.txt":
+			require.Equal(t, "/bla/multi-nested/subdir/c.txt", f.Destination)
+		}
+	}
+}
+
+func TestDeepPathsWithoutGlob(t *testing.T) {
+	var config testStruct
+	dec := yaml.NewDecoder(strings.NewReader(`---
+contents:
+- src: testdata/globtest
+  dst: /bla
+`))
+	dec.KnownFields(true)
+	err := dec.Decode(&config)
+	require.NoError(t, err)
+	require.Len(t, config.Contents, 1)
+	parsedContents, err := files.ExpandContentGlobs(config.Contents, true)
+	require.NoError(t, err)
+	for _, f := range parsedContents {
+		switch f.Source {
+		case "testdata/globtest/nested/b.txt":
+			require.Equal(t, "/bla/nested/b.txt", f.Destination)
+		case "testdata/globtest/multi-nested/subdir/c.txt":
+			require.Equal(t, "/bla/multi-nested/subdir/c.txt", f.Destination)
+		case "testdata/globtest/a.txt":
+			require.Equal(t, "/bla/a.txt", f.Destination)
+		default:
+			t.Errorf("unknown source %s", f.Source)
+		}
 	}
 }
 

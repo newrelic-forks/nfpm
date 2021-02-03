@@ -31,10 +31,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto"
-	_ "crypto/md5"
-	_ "crypto/sha1" // nolint:gosec
-	_ "crypto/sha256"
-	_ "crypto/sha512"
+	_ "crypto/md5"    // nolint:gosec
+	_ "crypto/sha1"   // nolint:gosec
+	_ "crypto/sha256" // required by the crypto abstraction
+	_ "crypto/sha512" // required by the crypto abstraction
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -74,6 +74,7 @@ var archToAlpine = map[string]string{
 	// "s390x":  "???",
 }
 
+// nolint: gochecknoglobals
 var supportedChecksumHash = map[crypto.Hash]string{
 	crypto.MD5:    "MD5",
 	crypto.SHA1:   "SHA1",
@@ -229,8 +230,7 @@ func writeTgz(w io.Writer, kind tarKind, builder func(tw *tar.Writer) error, dig
 	size := cw.Count()
 	alignedSize := (size + 511) & ^uint64(511)
 
-	increase := alignedSize - size
-	if increase > 0 {
+	if increase := alignedSize - size; increase > 0 {
 		b := make([]byte, increase)
 		_, err = cw.Write(b)
 		if err != nil {
@@ -388,12 +388,12 @@ func newItemInsideTarGz(out *tar.Writer, content []byte, header *tar.Header) err
 	header.Format = tar.FormatPAX
 	header.PAXRecords = make(map[string]string)
 
-	for hasher, name := range supportedChecksumHash {
-		if !hasher.Available() {
+	for hashType, name := range supportedChecksumHash {
+		if !hashType.Available() {
 			continue
 		}
-		hash := hasher.New()
-		header.PAXRecords[fmt.Sprintf("APK-TOOLS.checksum.%s", name)] = fmt.Sprintf("%x", hash.Sum(content))
+		hasher := hashType.New()
+		header.PAXRecords[fmt.Sprintf("APK-TOOLS.checksum.%s", name)] = fmt.Sprintf("%x", hasher.Sum(content))
 	}
 	if err := out.WriteHeader(header); err != nil {
 		return fmt.Errorf("cannot write header of %s file to control.tar.gz: %w", header.Name, err)
