@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:kinetic
 ARG package
 COPY ${package} /tmp/foo.deb
 ENV EXPECTVER=" Version: 1.0.0~0.1.b1+git.abcdefgh"
