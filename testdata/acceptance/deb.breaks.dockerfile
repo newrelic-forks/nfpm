@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:kinetic
 ARG package
 COPY dummy.deb /tmp/dummy.deb
 COPY ${package} /tmp/foo.deb
