@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:kinetic
 ARG package
 COPY ${package} /tmp/foo.deb
 RUN dpkg -i /tmp/foo.deb
