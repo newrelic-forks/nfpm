@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:22.10
 ARG package
 COPY dummy.deb /tmp/dummy.deb
 COPY ${package} /tmp/foo.deb
