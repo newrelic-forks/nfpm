@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:kinetic
 ARG package
 COPY keys/pubkey.gpg /usr/share/debsig/keyrings/BC8ACDD415BD80B3/debsig.gpg
 COPY ${package} /tmp/foo.deb
