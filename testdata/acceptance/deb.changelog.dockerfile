@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:kinetic
 ARG package
 # the dpkg configuration of the docker
 # image filters out changelogs by default
